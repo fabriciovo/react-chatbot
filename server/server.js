@@ -2,131 +2,205 @@ require("dotenv/config");
 const cors = require("cors");
 const express = require("express");
 const { MongoClient } = require("mongodb");
-const { OpenAI } = require("langchain/llms/openai");
+const { OpenAI, OpenAIEmbeddings } = require("@langchain/openai");
+const { PromptTemplate } = require("@langchain/core/prompts");
+
+  const app = express();
+
+  app.use(express.json());
+  app.use(cors());
 
 
-const app = express();
+  const llm = new OpenAI({
+    model: "gpt-3.5-turbo-instruct",
+    temperature: 0,
+    maxTokens: undefined,
+    timeout: undefined,
+    maxRetries: 2,
+    apiKey: process.env.OPENAI_API_KEY,
+    });
 
-app.use(express.json());
-app.use(cors());
+    const uri = process.env.MONGODB_URI;
+    const client = new MongoClient(uri);
+    
+    let db, collection;
+    const collectionName = "listingsAndReviews";
+    
+    (async () => {
+      try {
+        await client.connect();
+        db = client.db("sample_airbnb");
+        collection = db.collection(collectionName);
+        console.log("Conectado ao MongoDB com sucesso!");
+      } catch (error) {
+        console.error("Erro ao conectar ao MongoDB:", error);
+      }
+    })();
 
-const openai = new OpenAI({
-  openAIApiKey: process.env.OPENAI_API_KEY,
-  modelName: "gpt-3.5-turbo",
-  temperature: 0.7,
-});
+  app.get("/", (req, res) => {
+    res.json({ answer: "Hello world! Este chatbot usa LangChain para responder perguntas sobre acomodações." });
+  });
 
-const uri = process.env.MONGODB_URI; 
-const client = new MongoClient(uri);
+  // app.post("/botMessage", async (req, res) => {
+  //   const { message } = req.body;
 
-let db, collection;
-const collectionName = "listingsAndReviews"; 
+  //   if (!message) {
+  //     return res.status(400).json({ error: "Mensagem é obrigatória!" });
+  //   }
 
-(async () => {
-  try {
-    await client.connect();
-    db = client.db("sample_airbnb");
-    collection = db.collection(collectionName);
-    console.log("Conectado ao MongoDB com sucesso!");
-  } catch (error) {
-    console.error("Erro ao conectar ao MongoDB:", error);
-  }
-})();
+  //   try {
+  //     const queryVector = await getVector(message);
 
-app.get("/", (req, res) => {
-  res.json({ answer: "Hello world! Este chatbot usa LangChain para responder perguntas sobre acomodações." });
-});
+  //     const results = await collection.aggregate([
+  //       {
+  //         $search: {
+  //           index: "default",
+  //           knnBeta: {
+  //             vector: queryVector,
+  //             path: "embedding",
+  //             k: 3,
+  //           },
+  //         },
+  //       },
+  //       {
+  //         $project: {
+  //           name: 1,
+  //           description: 1,
+  //           url: 1,
+  //           score: { $meta: "searchScore" },
+  //         },
+  //       },
+  //     ]).toArray();
 
-app.post("/botMessage", async (req, res) => {
-  const { message } = req.body;
+  //     const contextListings = results
+  //       .map((listing) => `- ${listing.name}: ${listing.description}`)
+  //       .join("\n");
 
-  if (!message) {
-    return res.status(400).json({ error: "Mensagem é obrigatória!" });
-  }
 
-  try {
-    const queryVector = await getVector(message);
 
-    const results = await collection.aggregate([
-      {
-        $search: {
-          index: "default",
-          knnBeta: {
-            vector: queryVector, 
-            path: "embedding", 
-            k: 3, 
+  //       const prompt = new PromptTemplate({
+  //         template: "Você é um assistente especializado em acomodações da coleção 'sample_airbnb.listingsAndReviews' e ajuda os usuários a encontrar listagens relevantes.",
+  //         inputVariables: ["input", "output_language"],
+  //       });
+
+
+  //     // const prompt = ChatPromptTemplate.fromPromptMessages([
+  //     //   SystemMessagePromptTemplate.fromTemplate(
+  //     //     "Você é um assistente especializado em acomodações da coleção 'sample_airbnb.listingsAndReviews' e ajuda os usuários a encontrar listagens relevantes."
+  //     //   ),
+  //     //   HumanMessagePromptTemplate.fromTemplate(
+  //     //     `Aqui estão as listagens mais relacionadas à pergunta do usuário:\n{context}\n\nPergunta: "{message}"`
+  //     //   ),
+  //     // ]);
+
+  //     // const chain = new LLMChain({
+  //     //   llm: openai,
+  //     //   prompt,
+  //     // });
+
+  //     // const botResponse = await chain.call({
+  //     //   context: contextListings,
+  //     //   message,
+  //     // });  
+
+  //     const chain = prompt.pipe(llm);
+  //     await chain.invoke({
+  //       output_language: "Portuguese",
+  //       input: "I love programming.",
+  //     });
+
+  //     console.log(chain)
+
+  //     res.json({  
+  //       userMessage: message,
+  //       botResponse: "botResponse.text",
+  //     });
+  //   } catch (error) {
+  //     console.error("Erro ao processar a mensagem:", error);
+  //     res.status(500).json({ error: "Erro ao processar a mensagem com o LangChain ou MongoDB." });
+  //   }
+  // });
+
+  app.post("/botMessage", async (req, res) => {
+    const { message } = req.body;
+  
+    if (!message) {
+      return res.status(400).json({ error: "Mensagem é obrigatória!" });
+    }
+  
+    try {
+      const queryVector = await getVector(message);
+  
+      const results = await collection.aggregate([
+        {
+          $search: {
+            index: "default",
+            knnBeta: {
+              vector: queryVector,
+              path: "embedding",
+              k: 3,
+            },
           },
         },
-      },
-      {
-        $project: {
-          name: 1,
-          description: 1,
-          url: 1,
-          score: { $meta: "searchScore" },
+        {
+          $project: {
+            name: 1,
+            description: 1,
+            url: 1,
+            score: { $meta: "searchScore" },
+          },
         },
-      },
-    ]).toArray();
+      ]).toArray();
+  
+      const contextListings = results
+        .map((listing) => `- ${listing.name}: ${listing.description}`)
+        .join("\n");
+  
+      const prompt = new PromptTemplate({
+        template: `Você é um assistente especializado em acomodações da coleção Airbnb e ajuda os usuários a encontrar listagens relevantes. Aqui estão as listagens mais relacionadas à pergunta do usuário:\n${contextListings}\n\nPergunta: "{message}"`,
+        inputVariables: ["message"],
+      });
+  
+      const chain = prompt.pipe(llm);
+  
+      const botResponse = await chain.invoke({
+        message,
+      });
 
-    const contextListings = results
-      .map((listing) => `- ${listing.name}: ${listing.description}`)
-      .join("\n");
+      res.json({
+        userMessage: message,
+        botResponse: botResponse,
+      });
+    } catch (error) {
+      console.error("Erro ao processar a mensagem:", error);
+      res.status(500).json({ error: "Erro ao processar a mensagem com o LangChain ou MongoDB." });
+    }
+  });
 
-    const prompt = ChatPromptTemplate.fromPromptMessages([
-      SystemMessagePromptTemplate.fromTemplate(
-        "Você é um assistente especializado em acomodações da coleção 'sample_airbnb.listingsAndReviews' e ajuda os usuários a encontrar listagens relevantes."
-      ),
-      HumanMessagePromptTemplate.fromTemplate(
-        `Aqui estão as listagens mais relacionadas à pergunta do usuário:\n{context}\n\nPergunta: "{message}"`
-      ),
-    ]);
-
-    const chain = new LLMChain({
-      llm: openai,
-      prompt,
-    });
-
-    const botResponse = await chain.call({
-      context: contextListings,
-      message,
-    });
-
-    res.json({
-      userMessage: message,
-      botResponse: botResponse.text,
-    });
-  } catch (error) {
-    console.error("Erro ao processar a mensagem:", error);
-    res.status(500).json({ error: "Erro ao processar a mensagem com o LangChain ou MongoDB." });
+  async function getVector(text) {
+    try {
+      const embeddings = new OpenAIEmbeddings();
+      const res = await embeddings.embedQuery(text);
+  
+      return res
+    } catch (error) {
+      console.error("Erro ao gerar vetor de texto:", error);
+      throw error;
+    }
   }
-});
 
-async function getVector(text) {
-  try {
-    const response = await openai.embeddings.create({
-      model: "text-embedding-ada-002",
-      input: text,
-    });
+  app.use((request, response) => {
+    response.status(404).json({ message: "404 - Not Found", status: 404 });
+  });
 
-    return response.data[0].embedding;
-  } catch (error) {
-    console.error("Erro ao gerar vetor de texto:", error);
-    throw error;
-  }
-}
+  app.use((error, request, response, next) => {
+    console.error(error);
+    response
+      .status(error.status || 500)
+      .json({ error: error.message, status: 500 });
+  });
 
-app.use((request, response) => {
-  response.status(404).json({ message: "404 - Not Found", status: 404 });
-});
-
-app.use((error, request, response, next) => {
-  console.error(error);
-  response
-    .status(error.status || 500)
-    .json({ error: error.message, status: 500 });
-});
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+  });

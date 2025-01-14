@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@langchain/core": "^0.3.30",
     "@langchain/openai": "^0.3.17",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

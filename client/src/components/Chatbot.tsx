@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface Message {
   sender: "user" | "bot";
@@ -10,8 +10,25 @@ const Chatbot: React.FC = () => {
 
   const [messages, setMessages] = useState<Message[]>([firstBotMessage]);
   const [input, setInput] = useState<string>("");
+  const [isActive, setIsActive] = useState<boolean>(false);
+
   const [minimize, setMinimize] = useState<boolean>(false);
 
+
+  const handleKeyPress = (e:KeyboardEvent) => {
+    console.log("~sadfkopasopksfapokasd")
+    if (e.key === 'Enter' && isActive) {
+      sendMessage();
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyPress);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [isActive]); 
 
 
   const sendMessage = () => {
@@ -59,9 +76,12 @@ const Chatbot: React.FC = () => {
 
   return (
     <div className="flex flex-col max-w-md mx-auto bg-white border rounded-lg shadow-lg fixed right-1 bottom-0 w-[320px] transition-all"
+    onMouseOut={()=>setIsActive(false)}
+    onMouseDown={()=>setIsActive(true)}
     style={{height: minimize ? 384 : 47 }}>
       <button className="w-1/2 text-center " onClick={()=>setMinimize(prev => !prev)}> {minimize ? <>Min</> : <>Max</>}</button>
       <div
+      
         className="flex-grow overflow-y-auto p-4"
         style={{ height: "300px" }}
       >
@@ -89,6 +109,7 @@ const Chatbot: React.FC = () => {
         />
         <button
           onClick={sendMessage}
+          
           className="ml-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
         >
           Enviar
