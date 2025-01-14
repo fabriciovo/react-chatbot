@@ -1,7 +1,9 @@
 require("dotenv/config");
-const cors = require('cors');
-const express = require('express');
-const OpenAI = require("openai");
+const cors = require("cors");
+const express = require("express");
+const { MongoClient } = require("mongodb");
+const { OpenAI } = require("langchain/llms/openai");
+
 
 const app = express();
 
@@ -9,17 +11,30 @@ app.use(express.json());
 app.use(cors());
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  openAIApiKey: process.env.OPENAI_API_KEY,
+  modelName: "gpt-3.5-turbo",
+  temperature: 0.7,
 });
 
-const mockNews = [
-  { id: 1, title: "Motoristas de carros de luxo envolvidos em acidente fatal são autuados por racha", url: "https://www.band.uol.com.br/noticias/brasil-urgente/ultimas/motoristas-de-carros-de-luxo-envolvidos-em-acidente-fatal-sao-autuados-por-racha-202501091809", content: "Proprietário do Audi envolvido no acidente deve ser investigado por homicídio e lesão corporal culposos na direção de veículo automotor" },
-  { id: 2, title: "Avião da FAB faz pouso de emergência em Brasília após problema técnico", url: "https://www.band.uol.com.br/noticias/aviao-da-fab-faz-pouso-de-emergencia-em-brasilia-apos-problema-tecnico-202501091700", content: "Segundo o Comando da Aeronáutica, a aeronave teve problemas técnicos durante um voo de experiência. Ninguém ficou ferido." },
-  { id: 3, title: "Entidades pedem que Dino reconsidere decisão que suspendeu emendas", url: "https://www.band.uol.com.br/noticias/entidades-pedem-que-dino-reconsidere-decisao-que-suspendeu-emendas-202501091657", content: "Dino bloqueou o envio de emendas a 13 organizações que, segundo a Controladoria-Geral da União, não dão a transparência adequada à gestão dos recursos públicos" },
-];
+const uri = process.env.MONGODB_URI; 
+const client = new MongoClient(uri);
 
-app.get('/', (req, res) => {
-  res.json({ answer: "Olá mundo!" });
+let db, collection;
+const collectionName = "listingsAndReviews"; 
+
+(async () => {
+  try {
+    await client.connect();
+    db = client.db("sample_airbnb");
+    collection = db.collection(collectionName);
+    console.log("Conectado ao MongoDB com sucesso!");
+  } catch (error) {
+    console.error("Erro ao conectar ao MongoDB:", error);
+  }
+})();
+
+app.get("/", (req, res) => {
+  res.json({ answer: "Hello world! Este chatbot usa LangChain para responder perguntas sobre acomodações." });
 });
 
 app.post("/botMessage", async (req, res) => {
@@ -30,45 +45,75 @@ app.post("/botMessage", async (req, res) => {
   }
 
   try {
-    const query = message.toLowerCase();
-    const newsList = mockNews.filter(
-      (news) =>
-        news.title.toLowerCase().includes(query) ||
-        news.content.toLowerCase().includes(query)
-    );
+    const queryVector = await getVector(message);
 
-    const contextNews = newsList
-      .map((news) => `- ${news.title}: ${news.url}`)
+    const results = await collection.aggregate([
+      {
+        $search: {
+          index: "default",
+          knnBeta: {
+            vector: queryVector, 
+            path: "embedding", 
+            k: 3, 
+          },
+        },
+      },
+      {
+        $project: {
+          name: 1,
+          description: 1,
+          url: 1,
+          score: { $meta: "searchScore" },
+        },
+      },
+    ]).toArray();
+
+    const contextListings = results
+      .map((listing) => `- ${listing.name}: ${listing.description}`)
       .join("\n");
 
-    const prompt = `Você é um chatbot que responde perguntas sobre notícias do https://www.band.uol.com.br/noticias. Aqui estão algumas notícias relacionadas:\n${contextNews}\n\nPergunta do usuário: "${message}"`;
+    const prompt = ChatPromptTemplate.fromPromptMessages([
+      SystemMessagePromptTemplate.fromTemplate(
+        "Você é um assistente especializado em acomodações da coleção 'sample_airbnb.listingsAndReviews' e ajuda os usuários a encontrar listagens relevantes."
+      ),
+      HumanMessagePromptTemplate.fromTemplate(
+        `Aqui estão as listagens mais relacionadas à pergunta do usuário:\n{context}\n\nPergunta: "{message}"`
+      ),
+    ]);
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: "Você é um assistente especializado em notícias do https://www.band.uol.com.br/noticias"
-        },
-        {
-          role: "user",
-          content: prompt
-        },
-      ],
+    const chain = new LLMChain({
+      llm: openai,
+      prompt,
     });
 
-
-    const botResponse = response.choices[0].message.content;
+    const botResponse = await chain.call({
+      context: contextListings,
+      message,
+    });
 
     res.json({
       userMessage: message,
-      botResponse,
+      botResponse: botResponse.text,
     });
   } catch (error) {
-    console.error("Erro ao chamar a API do ChatGPT:", error);
-    res.status(500).json({ error: "Erro ao se comunicar com o ChatGPT." });
+    console.error("Erro ao processar a mensagem:", error);
+    res.status(500).json({ error: "Erro ao processar a mensagem com o LangChain ou MongoDB." });
   }
 });
+
+async function getVector(text) {
+  try {
+    const response = await openai.embeddings.create({
+      model: "text-embedding-ada-002",
+      input: text,
+    });
+
+    return response.data[0].embedding;
+  } catch (error) {
+    console.error("Erro ao gerar vetor de texto:", error);
+    throw error;
+  }
+}
 
 app.use((request, response) => {
   response.status(404).json({ message: "404 - Not Found", status: 404 });
