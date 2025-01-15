@@ -42,7 +42,7 @@ const Chatbot: FC = () => {
 
   const getBotMessage = async (userInput: string) => {
     try {
-      const response = await fetch("http://localhost:3002/botMessage", {
+      const response = await fetch("http://localhost:3002/api/botMessage", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
