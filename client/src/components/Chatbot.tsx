@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { FC, useEffect, useState } from "react";
 
 interface Message {
   sender: "user" | "bot";
   text: string;
 }
 
-const Chatbot: React.FC = () => {
+const Chatbot: FC = () => {
   const firstBotMessage: Message = { sender: "bot", text: "Olá, eu sou seu assistente da Band, pode perguntar qualquer coisa :)" };
 
   const [messages, setMessages] = useState<Message[]>([firstBotMessage]);
@@ -16,7 +16,6 @@ const Chatbot: React.FC = () => {
 
 
   const handleKeyPress = (e:KeyboardEvent) => {
-    console.log("~sadfkopasopksfapokasd")
     if (e.key === 'Enter' && isActive) {
       sendMessage();
     }
@@ -43,7 +42,7 @@ const Chatbot: React.FC = () => {
 
   const getBotMessage = async (userInput: string) => {
     try {
-      const response = await fetch("http://localhost:3002/botMessage", {
+      const response = await fetch("http://localhost:3002/api/botMessage", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
