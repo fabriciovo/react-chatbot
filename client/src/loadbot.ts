@@ -1,6 +1,6 @@
 (function () {
-    const chatbotCssUrl = `${import.meta.env.VITE_CHATBOT_SITE}/assets/index.css`;
-    const chatbotJsUrl = `${import.meta.env.VITE_CHATBOT_SITE}/chatbot.js`;
+    const chatbotCssUrl = `${import.meta.env.VITE_CHATBOT_SITE}/assets/main.css`;
+    const chatbotJsUrl = `${import.meta.env.VITE_CHATBOT_SITE}/loadbot.js`;
   
     const link = document.createElement("link");
     link.rel = "stylesheet";
