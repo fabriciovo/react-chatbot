@@ -10,11 +10,5 @@ export default defineConfig({
       name: "LoadChatbot",
       fileName: "loadbot",
     },
-    rollupOptions: {
-      output: {
-        entryFileNames: 'chatbot.js',
-        assetFileNames: 'assets/[name].[ext]',
-      },  
-    },
   },
 })
