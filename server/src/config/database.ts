@@ -3,8 +3,8 @@ import { MongoClient, Db, Collection } from "mongodb";
 let db: Db | null = null;
 let collection: Collection | null = null;
 
-const DB_NAME = "sample_airbnb"
-const COLLECTION_NAME = "listingsAndReviews"
+const DB_NAME = "chatbot"
+const COLLECTION_NAME = "KeyValue"
 
 export const connectToDatabase = async (): Promise<void> => {
   try {

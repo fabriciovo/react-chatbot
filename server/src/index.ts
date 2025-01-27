@@ -2,6 +2,8 @@ import express, { Application, Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import botRoutes from "@routes/botRoutes";
+import syncDataRoutes from "@routes/syncDataRoutes";
+
 import { connectToDatabase } from "@config/database";
 
 dotenv.config();
@@ -14,6 +16,8 @@ app.use(cors());
 connectToDatabase();
 
 app.use("/api", botRoutes);
+
+app.use("/api", syncDataRoutes);
 
 app.get("/", (req: Request, res: Response) => {
   res.json({
